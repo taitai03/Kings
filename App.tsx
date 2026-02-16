@@ -1,5 +1,5 @@
 import { StatusBar } from 'expo-status-bar';
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   SafeAreaView,
   StyleSheet,
@@ -8,6 +8,8 @@ import {
   TouchableOpacity,
   TextInput,
   ScrollView,
+  Animated,
+  Easing,
 } from 'react-native';
 
 type Suit = '♠' | '♥' | '♦' | '♣' | 'JOKER';
@@ -109,6 +111,46 @@ export default function App() {
   const [punishments, setPunishments] =
     useState<Punishments>(defaultPunishments);
 
+  // カードの3Dフリップアニメーション用（裏→表）
+  // 0: 裏面が手前 / 1: 表面が手前 になるようにしている
+  const flipAnim = useRef(new Animated.Value(0)).current;
+  const AnimatedTouchableOpacity =
+    Animated.createAnimatedComponent(TouchableOpacity);
+
+  const cardAnimatedStyle = {
+    transform: [
+      {
+        perspective: 1000,
+      },
+    ],
+  };
+
+  // 表面（数字側）の回転：180deg（裏向き）→ 360deg（表向き）
+  const frontSideAnimatedStyle = {
+    transform: [
+      { perspective: 1000 },
+      {
+        rotateY: flipAnim.interpolate({
+          inputRange: [0, 1],
+          outputRange: ['180deg', '360deg'],
+        }),
+      },
+    ],
+  };
+
+  // 裏面（TAP側）の回転：0deg（表向き）→ 180deg（裏向き）
+  const backSideAnimatedStyle = {
+    transform: [
+      { perspective: 1000 },
+      {
+        rotateY: flipAnim.interpolate({
+          inputRange: [0, 1],
+          outputRange: ['0deg', '180deg'],
+        }),
+      },
+    ],
+  };
+
   const handleDrawCard = () => {
     if (isGameOver || deck.length === 0) {
       return;
@@ -134,6 +176,15 @@ export default function App() {
 
       return restDeck;
     });
+
+    // 裏面（TAP）→ 表面（カード）の3Dフリップアニメーション
+    flipAnim.setValue(0); // まず裏面の状態から
+    Animated.timing(flipAnim, {
+      toValue: 1,
+      duration: 600,
+      easing: Easing.inOut(Easing.quad),
+      useNativeDriver: true,
+    }).start();
   };
 
   const handleShuffle = () => {
@@ -153,9 +204,8 @@ export default function App() {
 
   const renderCardFace = () => {
     if (!currentCard) {
-      return <Text style={styles.cardBackText}>TAP</Text>;
+      return null;
     }
-
     if (currentCard.rank === 'JOKER') {
       return (
         <View style={styles.cardInner}>
@@ -183,6 +233,14 @@ export default function App() {
             ? 'K'
             : currentCard.rank}
         </Text>
+      </View>
+    );
+  };
+
+  const renderCardBack = () => {
+    return (
+      <View style={styles.cardInner}>
+        <Text style={styles.cardBackText}></Text>
       </View>
     );
   };
@@ -218,9 +276,10 @@ export default function App() {
             </View>
 
             <View style={styles.gameArea}>
-              <TouchableOpacity
+              <AnimatedTouchableOpacity
                 style={[
                   styles.card,
+                  cardAnimatedStyle,
                   isGameOver || remainingCards === 0
                     ? styles.cardDisabled
                     : undefined,
@@ -228,8 +287,19 @@ export default function App() {
                 activeOpacity={0.8}
                 onPress={handleDrawCard}
               >
-                {renderCardFace()}
-              </TouchableOpacity>
+                {/* 表面（カード） */}
+                <Animated.View
+                  style={[styles.cardSide, frontSideAnimatedStyle]}
+                >
+                  {renderCardFace()}
+                </Animated.View>
+                {/* 裏面（TAP） */}
+                <Animated.View
+                  style={[styles.cardSide, styles.cardBackSide, backSideAnimatedStyle]}
+                >
+                  {renderCardBack()}
+                </Animated.View>
+              </AnimatedTouchableOpacity>
 
               {isGameOver && (
                 <Text style={styles.gameOverText}>
@@ -354,6 +424,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
     shadowColor: '#000',
     shadowOpacity: 0.25,
     shadowOffset: { width: 0, height: 4 },
@@ -366,6 +437,20 @@ const styles = StyleSheet.create({
   cardInner: {
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  cardSide: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backfaceVisibility: 'hidden',
+  },
+  cardBackSide: {
+    // 裏面は背景とはっきり違う色にする
+    backgroundColor: '#1E3A8A', // 濃い青
   },
   cardSuit: {
     fontSize: 32,
@@ -384,7 +469,7 @@ const styles = StyleSheet.create({
   cardBackText: {
     fontSize: 32,
     fontWeight: '700',
-    color: '#0B4F3F',
+    color: '#FFFFFF',
   },
   gameOverText: {
     marginTop: 16,
