@@ -10,7 +10,12 @@ import {
   ScrollView,
   Animated,
   Easing,
+  KeyboardAvoidingView,
+  Platform,
+  TouchableWithoutFeedback,
+  Keyboard,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 
 type Suit = '♠' | '♥' | '♦' | '♣' | 'JOKER';
 type NumberRank = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13;
@@ -114,14 +119,14 @@ export default function App() {
   // カードの3Dフリップアニメーション用（裏→表）
   // 0: 裏面が手前 / 1: 表面が手前 になるようにしている
   const flipAnim = useRef(new Animated.Value(0)).current;
+  const floatAnim = useRef(new Animated.Value(0)).current;
   const AnimatedTouchableOpacity =
     Animated.createAnimatedComponent(TouchableOpacity);
 
   const cardAnimatedStyle = {
     transform: [
-      {
-        perspective: 1000,
-      },
+        {perspective: 1000},
+        { translateY: floatAnim },
     ],
   };
 
@@ -132,7 +137,7 @@ export default function App() {
       {
         rotateY: flipAnim.interpolate({
           inputRange: [0, 1],
-          outputRange: ['180deg', '360deg'],
+          outputRange: ['-180deg', '0deg'],
         }),
       },
     ],
@@ -204,7 +209,11 @@ export default function App() {
 
   const renderCardFace = () => {
     if (!currentCard) {
-      return null;
+      return  (
+        <View style={styles.cardInner}>
+          <Text style={styles.cardRank}>TAP</Text>
+        </View>
+      );
     }
     if (currentCard.rank === 'JOKER') {
       return (
@@ -250,122 +259,127 @@ export default function App() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar style="light" />
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Kings - 飲み会トランプ</Text>
-          <TouchableOpacity
-            style={styles.headerButton}
-            onPress={() =>
-              setScreen((prev) => (prev === 'game' ? 'settings' : 'game'))
-            }
-          >
-            <Text style={styles.headerButtonText}>
-              {screen === 'game' ? 'ルール編集' : 'ゲームに戻る'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {screen === 'game' ? (
-          <>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoText}>
-                残り枚数: {remainingCards} / {deck.length + drawnCards.length}
-              </Text>
-              <Text style={styles.infoText}>キング: {kingCount} / 4</Text>
-            </View>
-
-            <View style={styles.gameArea}>
-              <AnimatedTouchableOpacity
-                style={[
-                  styles.card,
-                  cardAnimatedStyle,
-                  isGameOver || remainingCards === 0
-                    ? styles.cardDisabled
-                    : undefined,
-                ]}
-                activeOpacity={0.8}
-                onPress={handleDrawCard}
-              >
-                {/* 表面（カード） */}
-                <Animated.View
-                  style={[styles.cardSide, frontSideAnimatedStyle]}
-                >
-                  {renderCardFace()}
-                </Animated.View>
-                {/* 裏面（TAP） */}
-                <Animated.View
-                  style={[styles.cardSide, styles.cardBackSide, backSideAnimatedStyle]}
-                >
-                  {renderCardBack()}
-                </Animated.View>
-              </AnimatedTouchableOpacity>
-
-              {isGameOver && (
-                <Text style={styles.gameOverText}>
-                  4枚目のキングが出ました！ゲーム終了！
-                </Text>
-              )}
-              {!isGameOver && remainingCards === 0 && (
-                <Text style={styles.gameOverText}>カードがなくなりました。</Text>
-              )}
-            </View>
-
-            <View style={styles.punishmentArea}>
-              <Text style={styles.punishmentTitle}>このカードの罰ゲーム</Text>
-              <Text style={styles.punishmentText}>{punishmentText}</Text>
-            </View>
-
-            <View style={styles.footerButtons}>
-              <TouchableOpacity
-                style={styles.shuffleButton}
-                onPress={handleShuffle}
-              >
-                <Text style={styles.shuffleButtonText}>シャッフル</Text>
-              </TouchableOpacity>
-            </View>
-          </>
-        ) : (
-          <View style={styles.settingsArea}>
-            <Text style={styles.settingsTitle}>罰ゲームの内容を編集</Text>
-            <Text style={styles.settingsSubtitle}>
-              文言を変更すると、すぐにメイン画面に反映されます。
-            </Text>
-            <ScrollView
-              style={styles.settingsScroll}
-              contentContainerStyle={styles.settingsScrollContent}
+        <StatusBar style="light" />
+        <View style={styles.container}>
+          <View style={styles.header}>
+            <Text style={styles.title}>Kings</Text>
+            <TouchableOpacity
+              style={styles.headerButton}
+              onPress={() =>
+                setScreen((prev) => (prev === 'game' ? 'settings' : 'game'))
+              }
             >
-              {(
-                [
-                  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13,
-                ] as NumberRank[]
-              ).map((rank) => (
-                <View key={rank} style={styles.settingItem}>
-                  <Text style={styles.settingLabel}>カード {rank}</Text>
-                  <TextInput
-                    value={punishments[rank]}
-                    onChangeText={(text) => updatePunishment(rank, text)}
-                    style={styles.settingInput}
-                    placeholder="罰ゲームの内容を入力"
-                    multiline
-                  />
-                </View>
-              ))}
-
-              <View style={styles.settingItem}>
-                <Text style={styles.settingLabel}>ジョーカー</Text>
-                <TextInput
-                  value={punishments.joker}
-                  onChangeText={(text) => updatePunishment('JOKER', text)}
-                  style={styles.settingInput}
-                  placeholder="ジョーカーの罰ゲームを入力"
-                  multiline
-                />
-              </View>
-            </ScrollView>
+              <Text style={styles.headerButtonText}>
+                {screen === 'game' ? 'ルール編集' : 'ゲームに戻る'}
+              </Text>
+            </TouchableOpacity>
           </View>
-        )}
-      </View>
+  
+          {screen === 'game' ? (
+            <>
+              {/* 👇 ここから下はあなたのコードそのまま */}
+              <View style={styles.infoRow}>
+                <Text style={styles.infoText}>
+                  残り枚数: {remainingCards} / {deck.length + drawnCards.length}
+                </Text>
+                <Text style={styles.infoText}>キング: {kingCount} / 4</Text>
+              </View>
+  
+              <View style={styles.gameArea}>
+                <AnimatedTouchableOpacity
+                  style={[
+                    styles.card,
+                    cardAnimatedStyle,
+                    isGameOver || remainingCards === 0
+                      ? styles.cardDisabled
+                      : undefined,
+                  ]}
+                  activeOpacity={0.8}
+                  onPress={handleDrawCard}
+                >
+                  <Animated.View
+                    style={[styles.cardSide,styles.cardFrontSide ,frontSideAnimatedStyle]}
+                  >
+                    {renderCardFace()}
+                  </Animated.View>
+                  <Animated.View
+                    style={[styles.cardSide, styles.cardBackSide, backSideAnimatedStyle]}
+                  >
+                    {renderCardBack()}
+                  </Animated.View>
+                </AnimatedTouchableOpacity>
+  
+                {isGameOver && (
+                  <Text style={styles.gameOverText}>
+                    4枚目のキングが出ました！ゲーム終了！
+                  </Text>
+                )}
+                {!isGameOver && remainingCards === 0 && (
+                  <Text style={styles.gameOverText}>カードがなくなりました。</Text>
+                )}
+              </View>
+  
+              <View style={styles.punishmentArea}>
+                <Text style={styles.punishmentTitle}>このカードの罰ゲーム</Text>
+                <Text style={styles.punishmentText}>{punishmentText}</Text>
+              </View>
+  
+              <View style={styles.footerButtons}>
+                <TouchableOpacity
+                  style={styles.shuffleButton}
+                  onPress={handleShuffle}
+                >
+                  <Text style={styles.shuffleButtonText}>シャッフル</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          ) : (
+              <View style={{ flex: 1 }}>
+                <KeyboardAwareScrollView
+                  style={{ flex: 1 }}
+                  contentContainerStyle={{
+                    paddingHorizontal: 16,
+                    paddingTop: 8,
+                    paddingBottom: 150,
+                  }}
+                  enableOnAndroid
+                  extraScrollHeight={40}
+                  keyboardShouldPersistTaps="handled"
+                >
+                  <Text style={styles.settingsTitle}>罰ゲームの内容を編集</Text>
+                  <Text style={styles.settingsSubtitle}>
+                    文言を変更すると、すぐにメイン画面に反映されます。
+                  </Text>
+
+                  {(
+                    [1,2,3,4,5,6,7,8,9,10,11,12,13] as NumberRank[]
+                  ).map((rank) => (
+                    <View key={rank} style={styles.settingItem}>
+                      <Text style={styles.settingLabel}>カード {rank}</Text>
+                      <TextInput
+                        value={punishments[rank]}
+                        onChangeText={(text) => updatePunishment(rank, text)}
+                        style={styles.settingInput}
+                        placeholder="罰ゲームの内容を入力"
+                        multiline
+                      />
+                    </View>
+                  ))}
+
+                  <View style={styles.settingItem}>
+                    <Text style={styles.settingLabel}>ジョーカー</Text>
+                    <TextInput
+                      value={punishments.joker}
+                      onChangeText={(text) => updatePunishment('JOKER', text)}
+                      style={styles.settingInput}
+                      placeholder="ジョーカーの罰ゲームを入力"
+                      multiline
+                    />
+                  </View>
+                </KeyboardAwareScrollView>
+              </View>
+          )}
+        </View>
     </SafeAreaView>
   );
 }
@@ -379,7 +393,6 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 16,
     paddingTop: 8,
-    paddingBottom: 16,
   },
   header: {
     flexDirection: 'row',
@@ -421,10 +434,8 @@ const styles = StyleSheet.create({
     width: 180,
     height: 260,
     borderRadius: 16,
-    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
     shadowColor: '#000',
     shadowOpacity: 0.25,
     shadowOffset: { width: 0, height: 4 },
@@ -447,6 +458,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backfaceVisibility: 'hidden',
+    borderRadius: 16,
+  },
+  cardFrontSide: {
+    backgroundColor: '#FFFFFF', // ★追加
   },
   cardBackSide: {
     // 裏面は背景とはっきり違う色にする
@@ -511,7 +526,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   settingsArea: {
-    flex: 1,
     marginTop: 8,
   },
   settingsTitle: {
